@@ -450,11 +450,19 @@ user_state = {}
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer(
-        "👋 Привет!\n\n"
-        "Этот бот проведёт для вас тестирование по трудовому законодательству и охране труда РК.\n\n"
-        "📚 Полная база включает все вопросы.\n"
-        "🎯 В каждом тесте случайным образом выбирается 50 вопросов.\n"
-        "📈 Для успешной сдачи необходимо набрать **не менее 70%** правильных ответов.\n\n"
+        "👋 Привет!
+
+"
+        "Этот бот проведёт для вас тестирование по трудовому законодательству и охране труда РК.
+
+"
+        "📚 Полная база включает все вопросы.
+"
+        "🎯 В каждом тесте случайным образом выбирается 50 вопросов.
+"
+        "📈 Для успешной сдачи необходимо набрать **не менее 70%** правильных ответов.
+
+"
         "Нажмите /test, чтобы начать проверку знаний."
     )
 
@@ -462,7 +470,7 @@ async def cmd_start(message: Message):
 async def cmd_test(message: Message):
     user_id = message.from_user.id
     test_questions = random.sample(QUESTIONS_POOL, min(50, len(QUESTIONS_POOL)))
-   
+    
     user_state[user_id] = {
         "questions": test_questions,
         "index": 0,
@@ -479,7 +487,7 @@ async def send_question(message_or_callback, user_id):
 
     index = state["index"]
     questions = state["questions"]
-   
+    
     if index >= len(questions):
         score = state["score"]
         total = len(questions)
@@ -487,15 +495,23 @@ async def send_question(message_or_callback, user_id):
 
         if percentage >= 70:
             text = (
-                f"🎉 **Поздравляем! Экзамен успешно сдан!** 🏆\n\n"
-                f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).\n"
+                f"🎉 **Поздравляем! Экзамен успешно сдан!** 🏆
+
+"
+                f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).
+"
                 f"Вы отлично справились с проверкой знаний по БиОТ и ТК РК!"
             )
         else:
             text = (
-                f"❌ **Экзамен не сдан.**\n\n"
-                f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).\n"
-                f"Для успешной сдачи требуется набрать не менее **70%**.\n\n"
+                f"❌ **Экзамен не сдан.**
+
+"
+                f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).
+"
+                f"Для успешной сдачи требуется набрать не менее **70%**.
+
+"
                 f"🔄 Пожалуйста, отправьте команду /test, чтобы пройти пересдачу."
             )
 
@@ -514,7 +530,7 @@ async def send_question(message_or_callback, user_id):
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
     question_text = f"❓ **Вопрос {index + 1} из {len(questions)}**\n\n{q['question']}"
-   
+    
     if isinstance(message_or_callback, CallbackQuery):
         await message_or_callback.message.answer(question_text, reply_markup=keyboard, parse_mode="Markdown")
         await message_or_callback.answer()
@@ -525,7 +541,7 @@ async def send_question(message_or_callback, user_id):
 async def process_answer(callback: CallbackQuery):
     user_id = callback.from_user.id
     selected_option = int(callback.data.split("_")[1])
-   
+    
     state = user_state.get(user_id)
     if not state:
         await callback.answer("Сессия устарела. Начните заново с помощью /test", show_alert=True)
