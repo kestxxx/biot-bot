@@ -6,7 +6,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # Токен вашего бота (замените на ваш токен)
-TOKEN = "YOUR_BOT_TOKEN_HERE"
+TOKEN = "9005451655:AAH8wBg6bBrOmHnZGU054qW0vi6xn0X2WL4"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
