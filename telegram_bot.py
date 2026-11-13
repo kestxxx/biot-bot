@@ -1,163 +1,137 @@
-import asyncio
-import logging
+import os
+import json
+import random
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
-# Токен вашего бота (замените на ваш токен)
+# Токен вшит напрямую для стабильной работы на Railway
 TOKEN = "9005451655:AAH8wBg6bBrOmHnZGU054qW0vi6xn0X2WL4"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Полная база из 106 вопросов по БиОТ и ТК РК
-QUESTIONS = [
-    {
-        "question": "Какова минимальная продолжительность обучения по безопасности и охране труда для работников?",
-        "options": [
-            "устанавливается работодателем в соответствии с программой обучения",
-            "не менее 40 часов для всех категорий работников",
-            "строго 8 часов один раз при приеме на работу",
-            "определяется исключительно государственным инспектором труда"
-        ],
-        "correct_index": 0
-    },
-    {
-        "question": "В какой срок, по окончании расследования каждого несчастного случая, работодатель обязан выдать пострадавшему или его доверенному лицу акт о несчастном случае?",
-        "options": [
-            "не позднее семи дней",
-            "не позднее пяти дней",
-            "не нормируется",
-            "не позднее трёх рабочих дней"
-        ],
-        "correct_index": 3
-    },
-    {
-        "question": "Каковы основные функции службы безопасности и охраны труда в организации?",
-        "options": [
-            "организация и координация работы по безопасности и охране труда, контроль за соблюдением требований БиОТ",
-            "начисление заработной платы и премиальных выплат работникам",
-            "ведение бухгалтерского и налогового учета предприятия",
-            "утверждение штатного расписания и прием на работу кадров"
-        ],
-        "correct_index": 0
-    },
-    {
-        "question": "Кто относится к субъектам обязательного страхования работника от несчастных случаев?",
-        "options": [
-            "только работодатель и профсоюзный комитет",
-            "страхователь, страховщик, застрахованный и выгодоприобретатель",
-            "государственный инспектор труда и медицинская организация",
-            "исключительно работник и его близкие родственники"
-        ],
-        "correct_index": 1
-    },
-    {
-        "question": "Кем утверждаются правила трудового распорядка?",
-        "options": [
-            "профсоюзным комитетом",
-            "работодателем",
-            "инспектором по труду",
-            "главным техническим руководителем по ОТ"
-        ],
-        "correct_index": 1
-    }
-]
-
-# Хранение текущего состояния пользователя
+# Хранение текущего сеанса пользователя
 user_state = {}
+
+def load_questions():
+    """Загрузка вопросов из файла questions.json"""
+    if os.path.exists("questions.json"):
+        with open("questions.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    user_state[message.from_user.id] = {"index": 0, "score": 0}
+    questions_pool = load_questions()
     await message.answer(
-        "👋 Привет!"
-        
-        "Этот бот проведет для вас тестирование по трудовому законодательству и охране труда РК."
-        
+        "👋 Привет!\n\n"
+        "Этот бот проведёт для вас тестирование по трудовому законодательству и охране труда РК.\n\n"
+        f"📚 Загружено вопросов в базу: **{len(questions_pool)}**.\n"
+        "🎯 В каждом тесте случайным образом выбирается **50 вопросов**.\n"
+        "📈 Для успешной сдачи необходимо набрать **не менее 70%** правильных ответов.\n\n"
         "Нажмите /test, чтобы начать проверку знаний."
     )
 
 @dp.message(Command("test"))
 async def cmd_test(message: Message):
     user_id = message.from_user.id
-    user_state[user_id] = {"index": 0, "score": 0}
-    await send_question(user_id)
+    questions_pool = load_questions()
+   
+    if not questions_pool:
+        await message.answer("⚠️ Ошибка: файл `questions.json` не найден или пуст!")
+        return
+   
+    # Случайный выбор 50 вопросов из файла (или всех, если в базе меньше 50)
+    test_questions = random.sample(questions_pool, min(50, len(questions_pool)))
+   
+    user_state[user_id] = {
+        "questions": test_questions,
+        "index": 0,
+        "score": 0
+    }
+    await send_question(message, user_id)
 
-async def send_question(user_id: int):
+async def send_question(message_or_callback, user_id):
     state = user_state.get(user_id)
     if not state:
-        state = {"index": 0, "score": 0}
+        questions_pool = load_questions()
+        test_questions = random.sample(questions_pool, min(50, len(questions_pool)))
+        state = {"questions": test_questions, "index": 0, "score": 0}
         user_state[user_id] = state
 
-    idx = state["index"]
-    if idx >= len(QUESTIONS):
+    index = state["index"]
+    questions = state["questions"]
+   
+    # Если вопросы закончились — подводим итоги
+    if index >= len(questions):
         score = state["score"]
-        total = len(QUESTIONS)
-        await bot.send_message(
-            user_id,
-            f"🎉 **Тестирование завершено!**\n\n"
-            f"Ваш результат: **{score} из {total}** правильных ответов.\n\n"
-            f"Для повторного прохождения нажмите /test."
-        )
+        total = len(questions)
+        percentage = (score / total) * 100
+
+        if percentage >= 70:
+            text = (
+                f"🎉 **Поздравляем! Экзамен успешно сдан!** 🏆\n\n"
+                f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).\n"
+                f"Вы отлично справились с проверкой знаний по БиОТ и ТК РК!"
+            )
+        else:
+            text = (
+                f"❌ **Экзамен не сдан.**\n\n"
+                f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).\n"
+                f"Для успешной сдачи требуется набрать не менее **70%**.\n\n"
+                f"🔄 Пожалуйста, отправьте команду /test, чтобы пройти пересдачу."
+            )
+
+        if isinstance(message_or_callback, CallbackQuery):
+            await message_or_callback.message.answer(text, parse_mode="Markdown")
+            await message_or_callback.answer()
+        else:
+            await message_or_callback.answer(text, parse_mode="Markdown")
+       
+        # Очищаем состояние сеанса
+        user_state.pop(user_id, None)
         return
 
-    q = QUESTIONS[idx]
-    builder = InlineKeyboardBuilder()
-    
-    letters = ["A", "B", "C", "D"]
-    for i, opt in enumerate(q["options"]):
-        builder.button(text=f"{letters[i]}. {opt}", callback_data=f"ans_{i}")
-    
-    builder.adjust(1) # Кнопки в один столбец для удобства чтения длинных вариантов
-    
-    await bot.send_message(
-        user_id,
-        f"**Вопрос {idx + 1} из {len(QUESTIONS)}:**\n{q['question']}",
-        reply_markup=builder.as_markup(),
-        parse_mode="Markdown"
-    )
+    q = questions[index]
+    keyboard_buttons = [
+        [InlineKeyboardButton(text=option, callback_data=f"ans_{i}")]
+        for i, option in enumerate(q["options"])
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+    question_text = f"❓ **Вопрос {index + 1} из {len(questions)}**\n\n{q['question']}"
+   
+    if isinstance(message_or_callback, CallbackQuery):
+        await message_or_callback.message.answer(question_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message_or_callback.answer()
+    else:
+        await message_or_callback.answer(question_text, reply_markup=keyboard, parse_mode="Markdown")
 
 @dp.callback_query(F.data.startswith("ans_"))
-async def handle_answer(callback: CallbackQuery):
+async def process_answer(callback: CallbackQuery):
     user_id = callback.from_user.id
+   
     state = user_state.get(user_id)
     if not state:
-        await callback.answer("Сессия устарела. Нажмите /test для начала.")
+        await callback.answer("Сессия устарела или тест завершен. Начните заново с помощью /test", show_alert=True)
         return
 
     selected_option = int(callback.data.split("_")[1])
-    idx = state["index"]
-    q = QUESTIONS[idx]
-    correct_idx = q["correct_index"]
+    index = state["index"]
+    questions = state["questions"]
+    q = questions[index]
 
-    letters = ["A", "B", "C", "D"]
-    
-    if selected_option == correct_idx:
+    if selected_option == q["correct_index"]:
         state["score"] += 1
-        feedback = f"✅ **Верно!** Правильный ответ: {letters[correct_idx]}. {q['options'][correct_idx]}"
+        await callback.message.answer("✅ **Верно!**", parse_mode="Markdown")
     else:
-        feedback = (
-            f"❌ **Неверно.**\n\n"
-            f"Ваш выбор: {letters[selected_option]}. {q['options'][selected_option]}\n"
-            f"Правильный ответ: **{letters[correct_idx]}. {q['options'][correct_idx]}**"
-        )
-
-    # Редактируем сообщение с вопросом, убирая кнопки и показывая результат
-    await callback.message.edit_text(
-        f"**Вопрос {idx + 1}:**\n{q['question']}\n\n{feedback}",
-        parse_mode="Markdown"
-    )
+        correct_text = q["options"][q["correct_index"]]
+        await callback.message.answer(f"❌ **Неверно.**\nПравильный ответ: {correct_text}", parse_mode="Markdown")
 
     state["index"] += 1
-    await asyncio.sleep(1.5) # Пауза перед следующим вопросом
-    await send_question(user_id)
-
-async def main():
-    logging.basicConfig(level=logging.INFO)
-    print("Бот запущен...")
-    await dp.start_polling(bot)
+    await send_question(callback, user_id)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    asyncio.run(dp.start_polling(bot))
