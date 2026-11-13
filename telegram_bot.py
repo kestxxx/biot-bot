@@ -3,7 +3,7 @@ import json
 import random
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 
 # Токен вшит напрямую для стабильной работы на Railway
 TOKEN = "9005451655:AAH8wBg6bBrOmHnZGU054qW0vi6xn0X2WL4"
@@ -21,6 +21,15 @@ def load_questions():
             return json.load(f)
     return []
 
+async def set_bot_commands(bot: Bot):
+    """Установка кнопкок меню (Menu) в интерфейсе Telegram"""
+    commands = [
+        BotCommand(command="start", description="Запустить бота"),
+        BotCommand(command="test", description="Начать тестирование"),
+        BotCommand(command="restart", description="Перезапустить / Сбросить тест")
+    ]
+    await bot.set_my_commands(commands)
+
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     questions_pool = load_questions()
@@ -30,7 +39,23 @@ async def cmd_start(message: Message):
         f"📚 Загружено вопросов в базу: **{len(questions_pool)}**.\n"
         "🎯 В каждом тесте случайным образом выбирается **50 вопросов**.\n"
         "📈 Для успешной сдачи необходимо набрать **не менее 70%** правильных ответов.\n\n"
-        "Нажмите /test, чтобы начать проверку знаний."
+        "💡 Используйте кнопку **Menu** слева от поля ввода или команды:\n"
+        "• /test — начать экзамен\n"
+        "• /restart — сбросить текущий прогресс",
+        parse_mode="Markdown"
+    )
+
+@dp.message(Command("restart"))
+async def cmd_restart(message: Message):
+    user_id = message.from_user.id
+    # Сбрасываем текущую сессию пользователя, если она была
+    if user_id in user_state:
+        user_state.pop(user_id, None)
+   
+    await message.answer(
+        "🔄 Текущий сеанс сброшен.\n"
+        "Нажмите /test, чтобы начать тестирование заново.",
+        parse_mode="Markdown"
     )
 
 @dp.message(Command("test"))
@@ -80,7 +105,7 @@ async def send_question(message_or_callback, user_id):
                 f"❌ **Экзамен не сдан.**\n\n"
                 f"📊 Ваш результат: **{score} из {total}** ({percentage:.1f}%).\n"
                 f"Для успешной сдачи требуется набрать не менее **70%**.\n\n"
-                f"🔄 Пожалуйста, отправьте команду /test, чтобы пройти пересдачу."
+                f"🔄 Пожалуйста, отправьте команду /test или /restart, чтобы пройти пересдачу."
             )
 
         if isinstance(message_or_callback, CallbackQuery):
@@ -98,6 +123,9 @@ async def send_question(message_or_callback, user_id):
         [InlineKeyboardButton(text=option, callback_data=f"ans_{i}")]
         for i, option in enumerate(q["options"])
     ]
+    # Добавляем инлайн-кнопку отмены/перезапуска прямо под вопросами
+    keyboard_buttons.append([InlineKeyboardButton(text="🔄 Сбросить / Restart", callback_data="action_restart")])
+   
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
     question_text = f"❓ **Вопрос {index + 1} из {len(questions)}**\n\n{q['question']}"
@@ -107,6 +135,13 @@ async def send_question(message_or_callback, user_id):
         await message_or_callback.answer()
     else:
         await message_or_callback.answer(question_text, reply_markup=keyboard, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "action_restart")
+async def callback_restart(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user_state.pop(user_id, None)
+    await callback.message.answer("🔄 Тест прерван. Чтобы начать заново, отправьте команду /test")
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("ans_"))
 async def process_answer(callback: CallbackQuery):
@@ -132,6 +167,11 @@ async def process_answer(callback: CallbackQuery):
     state["index"] += 1
     await send_question(callback, user_id)
 
+async def main():
+    # Регистрируем кнопки меню при старте бота
+    await set_bot_commands(bot)
+    await dp.start_polling(bot)
+
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(dp.start_polling(bot))
+    asyncio.run(main())
